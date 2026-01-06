@@ -3,8 +3,14 @@
 #include<fstream>
 #include<filesystem>
 #include<limits>
+#include<termios.h>
+#include<unistd.h>
+#include<sstream>
+#include<openssl/sha.h>
 void RegisterUser();
 void LoginUser();
+std::string getHiddenPassword();
+std::string hashed_sha256(const std::string& str);
 using namespace std;
 
 int main()
@@ -52,12 +58,14 @@ int main()
 void RegisterUser(){
     string username;
     string password;
+    string hashedPassword;
     
     cout << "Enter Username : ";
     getline(cin, username);
     cout << "Enter Password : ";
-    getline(cin, password);
-
+    password = getHiddenPassword();
+    hashedPassword = hashed_sha256(password);
+    
     filesystem::create_directories("databases");
     string filePath = "databases/" + username + ".txt";
 
@@ -80,7 +88,7 @@ void RegisterUser(){
             return;
         }
         wFile << username << endl;
-        wFile << password << endl;
+        wFile << hashedPassword << endl;
         wFile.close();
     }
   
@@ -94,10 +102,13 @@ void RegisterUser(){
 void LoginUser(){
     string login_username;
     string login_password;
+    string login_hash;
     cout << "Enter Username: ";
     getline(cin, login_username);
     cout << "Enter Password: ";
-    getline(cin, login_password);
+    login_password = getHiddenPassword();
+    login_hash = hashed_sha256(login_password);
+
 
     string filePath = "databases/" + login_username + ".txt";
 
@@ -112,12 +123,12 @@ void LoginUser(){
         return;
     }
     string storedUsername;
-    string storedPasswd;
+    string storedHash;
     getline(rFile, storedUsername);
-    getline(rFile, storedPasswd);
+    getline(rFile, storedHash);
     rFile.close();
 
-    if(storedUsername == login_username && storedPasswd == login_password)
+    if(storedUsername == login_username && storedHash == login_hash)
     {
         cout << "Login Successful.\n";
     }
@@ -126,3 +137,49 @@ void LoginUser(){
     }
     
 }
+
+//To hide password input
+string getHiddenPassword()
+{
+    string password;
+    termios oldt;
+    termios newt;
+
+    // Get the current terminal attributes
+    if (tcgetattr(STDIN_FILENO, &oldt) != 0) {
+        throw std::runtime_error("tcgetattr failed");
+    }
+
+    // Copy the attributes to a new structure
+    newt = oldt;
+
+    // Disable the ECHO flag (local flag for echoing input characters)
+    newt.c_lflag &= ~ECHO;
+
+    // Set the new terminal attributes immediately
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &newt) != 0) {
+        throw std::runtime_error("tcsetattr failed");
+    }
+
+    // Read the password using standard input (std::getline works well here)
+    std::getline(std::cin, password);
+
+    // Restore the original terminal attributes
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &oldt) != 0) {
+        // Handle error, maybe log it, but the program can continue
+    }
+
+    return password;
+}
+
+//To hesh password
+std::string hashed_sha256(const std::string& str) 
+{ 
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)str.c_str(), str.size(), hash);
+    std::stringstream ss; 
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) 
+    { ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i]; } 
+    return ss.str(); 
+}
+

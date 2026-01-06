@@ -59,6 +59,8 @@ void RegisterUser(){
     string username;
     string password;
     string hashedPassword;
+    int failed_attempts = 0;
+    int lock_status = 0;
     
     cout << "Enter Username : ";
     getline(cin, username);
@@ -89,6 +91,8 @@ void RegisterUser(){
         }
         wFile << username << endl;
         wFile << hashedPassword << endl;
+        wFile << failed_attempts << endl;
+        wFile << lock_status << endl;
         wFile.close();
     }
   
@@ -124,17 +128,47 @@ void LoginUser(){
     }
     string storedUsername;
     string storedHash;
+    string line;
+    int failed_attempts;
+    int lock_status;
     getline(rFile, storedUsername);
     getline(rFile, storedHash);
+    getline(rFile, line);
+    failed_attempts = stoi(line);
+    getline(rFile, line);
+    lock_status = stoi(line);
     rFile.close();
+
+    if (lock_status == 1)
+    {
+        cout << "Account is Locked!Try again later.\n";
+        return;
+    }
 
     if(storedUsername == login_username && storedHash == login_hash)
     {
         cout << "Login Successful.\n";
+        failed_attempts = 0;
     }
     else{
+        failed_attempts ++;
+        if (failed_attempts >= 3)
+        {
+            lock_status = 1;
+        }
         cout << "Invalid username and password!\n";
     }
+    ofstream wFile(filePath);
+    if (!wFile)
+    {
+        cout << "No such file and can not open file!\n";
+        return;
+    }
+    wFile << storedUsername << endl;
+    wFile << storedHash << endl;
+    wFile << failed_attempts<< endl;
+    wFile << lock_status << endl;
+    wFile.close();
     
 }
 

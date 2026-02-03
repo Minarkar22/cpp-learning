@@ -3,8 +3,12 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cstring>
+#include <string>
+#include <fstream>
+#include <filesystem>
 
 std::string get_response(const std::string &request);
+std::string serve_file(const std::string &path);
 
 int main(){
    // create socket
@@ -72,18 +76,104 @@ int main(){
    return 0;
 }
 
-std::string get_response(const std::string &request){
-   std::string body =
-        "<html>"
-        "<h1>Hello from my HTTP Server</h1>"
-        "</html>";
+std::string serve_file(const std::string &path){
+   std::string doc_root = "./www"; //add real file path
 
-    std::string response =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n"
-        "Content-Length: " + std::to_string(body.size()) + "\r\n"
-        "Connection: close\r\n"
-        "\r\n" +
-        body;
-   return response;
+    // Prevent directory traversal
+   if (path.find("..") != std::string::npos) {
+      return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+   }
+
+   std::string file_path = (path == "/") ? doc_root + "/index.html" : doc_root + path ;
+
+   if (!std::filesystem::exists(file_path)){
+      std::string body = "<h1>404 Not Found</h1>";
+      return   
+         "HTTP/1.1 404 Not Found\r\n"
+         "Content-Type: text/html\r\n"
+         "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n"
+         + body;
+   }
+
+   std::ifstream file(file_path, std::ios::binary);
+   
+   std::string body(
+      (std::istreambuf_iterator<char>(file)),
+      std::istreambuf_iterator<char>()
+   );
+
+   std::string mime = "text/html";
+   if (file_path.size() >= 4 && file_path.substr(file_path.size()-4) == ".css")
+    mime = "text/css";
+   if (file_path.size() >= 4 && file_path.substr(file_path.size()-4) == ".js")
+    mime = "application/javascript";
+   if (file_path.size() >= 4 && file_path.substr(file_path.size()-4) == ".png")
+    mime = "image/png";
+   if (file_path.size() >= 4 && file_path.substr(file_path.size()-4) == ".jpeg")
+    mime = "image/jpeg";
+   if (file_path.size() >= 4 && file_path.substr(file_path.size()-4) == ".txt")
+    mime = "text/plain";
+   
+   
+   return "HTTP/1.1 200 OK\r\n"
+           "Content-Type: " + mime + "\r\n"
+           "Content-Length: " + std::to_string(body.size()) + "\r\n"
+           "Connection: close\r\n\r\n"
+           + body;
+}
+
+std::string get_response(const std::string &request){
+   size_t pos = request.find("\r\n");
+   if (pos == std::string::npos){
+      return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+   }
+
+   std::string first_line = request.substr(0, pos);
+   std::string method, path, version;
+
+   size_t sp1 = first_line.find(' ');
+   size_t sp2 = first_line.find(' ', sp1 + 1);
+
+   if (sp1 == std::string::npos || sp2 == std::string::npos){
+      return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+   }
+
+   method = first_line.substr(0, sp1);
+   path = first_line.substr(sp1 + 1, sp2 - sp1 -1);
+   version = first_line.substr(sp2 + 1);
+
+   if (method != "GET"){
+      return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
+   }
+
+   // std::string body;
+   // std::string status = "200 OK";
+
+   // if (path == "/" || path == "/index.html"){
+   //    body =
+   //      "<!DOCTYPE html>\n"
+   //       "<html><head><title>Tiny Server</title></head>\n"
+   //       "<body><h1>Hello from my tiny C++ HTTP server!</h1>\n"
+   //       "<p>Try going to <a href=\"/about\">/about</a></p></body></html>";
+   // } else {
+   //    status = "404 Not Found";
+   //    body = 
+   //       "<!DOCTYPE html>\n"
+   //       "<html><body><h1>404 - Not Found</h1>\n"
+   //       "<p>Sorry, that page does not exist.</p></body></html>";
+   // }
+
+
+   return serve_file(path);
+
+   
+
+// std::string response =
+//       "HTTP/1.1 " + status + "\r\n"
+//       "Content-Type: text/html; charset=utf-8\r\n"
+//       "Content-Length: " + std::to_string(body.size()) + "\r\n"
+//       "Connection: close\r\n"
+//       "\r\n" +
+//       body;
+//    return response;
 }
